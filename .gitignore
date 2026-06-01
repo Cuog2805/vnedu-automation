@@ -1,0 +1,15 @@
+# Bí mật - TUYỆT ĐỐI không đẩy lên git
+.env
+auth_state.json
+
+# Kết quả test / file tải về
+downloads/
+test-results/
+playwright-report/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+.venv/
