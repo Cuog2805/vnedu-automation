@@ -17,7 +17,7 @@ def pytest_addoption(parser):
         "--semester",
         action="store",
         default=None,
-        help="Học kỳ dùng cho đồng bộ KQHT/Y tế: hk1, hk2 hoặc cn.",
+        help="Học kỳ dùng cho đồng bộ KQHT/Y tế: gk1, hk1, gk2, hk2 hoặc cn.",
     )
 
 
@@ -130,12 +130,21 @@ def semester(pytestconfig):
     Học kỳ/Giai đoạn dùng cho đồng bộ KQHT/Y tế.
 
     Giá trị hợp lệ:
-        hk1 -> Học kỳ 1
-        hk2 -> Học kỳ 2
+        gk1 -> Giữa học kỳ 1
+        hk1 -> Cuối học kỳ 1/Học kỳ 1
+        gk2 -> Giữa học kỳ 2
+        hk2 -> Cuối học kỳ 2/Học kỳ 2
         cn  -> Cả năm
+
+    Nếu không truyền, test sẽ đọc và chạy tất cả option hiện có trong modal.
     """
-    value = pytestconfig.getoption("--semester") or os.getenv("VNEDU_SEMESTER") or "hk1"
+    value = pytestconfig.getoption("--semester") or os.getenv("VNEDU_SEMESTER")
+    if not value:
+        return None
+
     value = value.strip().lower()
-    if value not in {"hk1", "hk2", "cn"}:
-        pytest.fail("Học kỳ không hợp lệ. Dùng một trong các giá trị: hk1, hk2, cn.")
+    if value not in {"gk1", "hk1", "gk2", "hk2", "cn"}:
+        pytest.fail(
+            "Học kỳ không hợp lệ. Dùng một trong các giá trị: gk1, hk1, gk2, hk2, cn."
+        )
     return value
