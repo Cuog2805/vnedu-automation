@@ -1,17 +1,24 @@
-"""
-conftest.py — pytest tự động nạp file này, không cần import.
-Đây là nơi đặt các "fixture": những mảnh thiết lập dùng chung cho nhiều test.
-
-Hai vấn đề lớn mà file này giải quyết:
-  1. Đọc cấu hình (URL, user, mật khẩu) từ biến môi trường — KHÔNG hardcode.
-  2. Đăng nhập MỘT LẦN rồi tái dùng phiên cho mọi test — thay cho input() thủ công.
-"""
 import os
 import pytest
 from dotenv import load_dotenv
 
 # Nạp các biến trong file .env vào môi trường (chỉ cho máy local).
 load_dotenv()
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--school-code",
+        action="store",
+        default=None,
+        help="Mã trường VNEDU dùng cho test chức năng đồng bộ.",
+    )
+    parser.addoption(
+        "--semester",
+        action="store",
+        default=None,
+        help="Học kỳ dùng cho đồng bộ KQHT/Y tế: hk1, hk2 hoặc cn.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -76,3 +83,59 @@ def logged_in_page(page, config):
         )
     page.goto(config["base_url"])
     return page
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+
+    if report.when != "call" or not report.failed:
+        return
+
+    screenshot_path = os.getenv("VNEDU_SCREENSHOT_PATH")
+    page = item.funcargs.get("page")
+    if not screenshot_path or page is None:
+        return
+
+    try:
+        os.makedirs(os.path.dirname(screenshot_path), exist_ok=True)
+        page.screenshot(path=screenshot_path, full_page=False)
+    except Exception as exc:
+        report.sections.append(("screenshot", f"Không chụp được ảnh lỗi: {exc}"))
+
+
+@pytest.fixture(scope="session")
+def school_code(pytestconfig):
+    """
+    Mã trường cần test đồng bộ.
+
+    Tester nhập thủ công khi chạy test bằng:
+        pytest tests/test_dong_bo.py --school-code=4141437402
+
+    Có thể dùng biến môi trường VNEDU_SCHOOL_CODE nếu muốn lưu sẵn trong .env.
+    """
+    value = pytestconfig.getoption("--school-code") or os.getenv("VNEDU_SCHOOL_CODE")
+    if not value:
+        pytest.fail(
+            "Thiếu mã trường cần test. Hãy chạy: "
+            "pytest tests/test_dong_bo.py --school-code=<ma_truong>"
+        )
+    return value.strip()
+
+
+@pytest.fixture(scope="session")
+def semester(pytestconfig):
+    """
+    Học kỳ/Giai đoạn dùng cho đồng bộ KQHT/Y tế.
+
+    Giá trị hợp lệ:
+        hk1 -> Học kỳ 1
+        hk2 -> Học kỳ 2
+        cn  -> Cả năm
+    """
+    value = pytestconfig.getoption("--semester") or os.getenv("VNEDU_SEMESTER") or "hk1"
+    value = value.strip().lower()
+    if value not in {"hk1", "hk2", "cn"}:
+        pytest.fail("Học kỳ không hợp lệ. Dùng một trong các giá trị: hk1, hk2, cn.")
+    return value
