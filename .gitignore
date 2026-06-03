@@ -1,6 +1,7 @@
 # Bí mật - TUYỆT ĐỐI không đẩy lên git
 .env
 auth_state.json
+csdl_auth_state.json
 
 # Kết quả test / file tải về
 downloads/

@@ -4,6 +4,7 @@ from playwright.sync_api import Page, expect
 
 
 MAX_WAIT_TIMEOUT_MS = 48 * 60 * 60 * 1000
+SEARCH_WAIT_TIMEOUT_MS = 10_000
 
 
 class DongBoBasePage:
@@ -28,17 +29,78 @@ class DongBoBasePage:
         expect(self.school_table).to_be_visible(timeout=MAX_WAIT_TIMEOUT_MS)
         expect(self.search_input).to_be_visible(timeout=MAX_WAIT_TIMEOUT_MS)
 
-    def search_school(self, school_code: str):
+    def search_school(self, school_query: str):
         self.wait_until_ready()
-        self.search_input.fill(school_code)
+        school_query = school_query.strip()
+        self.search_input.fill(school_query)
         self.search_input.press("Enter")
 
-        expect(self.school_rows).to_have_count(1, timeout=MAX_WAIT_TIMEOUT_MS)
-        first_row = self.school_rows.first
-        expect(first_row.locator("td").nth(2)).to_have_text(
-            school_code, timeout=MAX_WAIT_TIMEOUT_MS
+        self._wait_for_school_search(school_query)
+        matched_count = self._filtered_school_row_count()
+
+        if matched_count != 1:
+            raise AssertionError(
+                f"Tìm trường '{school_query}' ra {matched_count} bản ghi. "
+                "Cần đúng 1 bản ghi; hãy nhập mã trường hoặc tên trường cụ thể hơn."
+            )
+
+        expect(self.school_rows).to_have_count(1, timeout=SEARCH_WAIT_TIMEOUT_MS)
+        return self.school_rows.first
+
+    def _wait_for_school_search(self, school_query: str):
+        self.page.wait_for_function(
+            """
+            (query) => {
+                const input = document.querySelector('#tableSchool_filter input[type="search"]');
+                if (!input || input.value !== query) {
+                    return false;
+                }
+
+                const processing = document.querySelector('#tableSchool_processing');
+                if (processing) {
+                    const style = window.getComputedStyle(processing);
+                    const isVisible = style.display !== 'none'
+                        && style.visibility !== 'hidden'
+                        && style.opacity !== '0';
+                    if (isVisible) {
+                        return false;
+                    }
+                }
+
+                const $ = window.jQuery;
+                if ($ && $.fn && $.fn.dataTable && $.fn.dataTable.isDataTable('#tableSchool')) {
+                    const table = $('#tableSchool').DataTable();
+                    return table.search() === query;
+                }
+
+                return document.querySelector('#tableSchool tbody') !== null;
+            }
+            """,
+            school_query,
+            timeout=SEARCH_WAIT_TIMEOUT_MS,
         )
-        return first_row
+
+    def _filtered_school_row_count(self):
+        return self.page.evaluate(
+            """
+            () => {
+                const $ = window.jQuery;
+                if ($ && $.fn && $.fn.dataTable && $.fn.dataTable.isDataTable('#tableSchool')) {
+                    const table = $('#tableSchool').DataTable();
+                    const info = table.page.info();
+                    if (info && Number.isFinite(info.recordsDisplay)) {
+                        return info.recordsDisplay;
+                    }
+                    return table.rows({ search: 'applied' }).count();
+                }
+
+                return Array
+                    .from(document.querySelectorAll('#tableSchool tbody tr'))
+                    .filter((row) => !row.querySelector('.dataTables_empty'))
+                    .length;
+            }
+            """
+        )
 
     def capture_result_screenshot(self):
         screenshot_path = os.getenv("VNEDU_SCREENSHOT_PATH")
