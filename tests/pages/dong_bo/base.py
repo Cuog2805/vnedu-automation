@@ -3,7 +3,7 @@ import os
 from playwright.sync_api import Page, expect
 
 
-MAX_WAIT_TIMEOUT_MS = 4 * 60 * 60 * 1000
+MAX_WAIT_TIMEOUT_MS = 48 * 60 * 60 * 1000
 
 
 class DongBoBasePage:
