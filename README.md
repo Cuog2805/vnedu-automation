@@ -10,19 +10,20 @@ playwright install chromium
 1. Sao chép `.env.example` thành `.env`
 2. Mở `.env`, điền URL / user / mật khẩu thật
 
-## Tạo phiên đăng nhập (làm lại khi phiên hết hạn)
+# Telegram Bot UI
+## Cấu hình
 
-```bash
-python scripts/save_login.py
+Thêm vào file `.env` ở thư mục gốc project:
+
+```env
+TELEGRAM_BOT_TOKEN=token_bot_cua_ban
+TELEGRAM_ALLOWED_CHAT_IDS=
 ```
 
-Trình duyệt mở ra → đăng nhập thủ công (gõ cả captcha) → quay lại terminal
-nhấn Enter. Phiên được lưu vào `auth_state.json`.
+## Chạy bot
 
-## Chạy test
+Từ thư mục gốc project:
 
-```bash
-pytest                       # chạy tất cả
-pytest tests/test_tai_so_do.py   # chạy 1 file
-pytest -k so_do              # chạy test có tên khớp "so_do"
+```powershell
+python telegram-bot\bot.py
 ```
