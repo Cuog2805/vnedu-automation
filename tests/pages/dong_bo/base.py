@@ -1,10 +1,12 @@
 import os
+import re
 
 from playwright.sync_api import Page, expect
 
 
 MAX_WAIT_TIMEOUT_MS = 48 * 60 * 60 * 1000
 SEARCH_WAIT_TIMEOUT_MS = 10_000
+SCHOOL_CODE_RE = re.compile(r"^[A-Za-z0-9_-]{3,30}$")
 
 
 class DongBoBasePage:
@@ -35,8 +37,16 @@ class DongBoBasePage:
         self.search_input.fill(school_query)
         self.search_input.press("Enter")
 
-        self._wait_for_school_search(school_query)
-        matched_count = self._filtered_school_row_count()
+        if SCHOOL_CODE_RE.fullmatch(school_query):
+            expect(self.school_rows).to_have_count(1, timeout=MAX_WAIT_TIMEOUT_MS)
+            first_row = self.school_rows.first
+            expect(first_row.locator("td").nth(2)).to_have_text(
+                school_query, timeout=MAX_WAIT_TIMEOUT_MS
+            )
+            return first_row
+
+        self._wait_for_school_search_result(school_query)
+        matched_count = self._visible_school_row_count()
 
         if matched_count != 1:
             raise AssertionError(
@@ -47,7 +57,7 @@ class DongBoBasePage:
         expect(self.school_rows).to_have_count(1, timeout=SEARCH_WAIT_TIMEOUT_MS)
         return self.school_rows.first
 
-    def _wait_for_school_search(self, school_query: str):
+    def _wait_for_school_search_result(self, school_query: str):
         self.page.wait_for_function(
             """
             (query) => {
@@ -67,33 +77,28 @@ class DongBoBasePage:
                     }
                 }
 
-                const $ = window.jQuery;
-                if ($ && $.fn && $.fn.dataTable && $.fn.dataTable.isDataTable('#tableSchool')) {
-                    const table = $('#tableSchool').DataTable();
-                    return table.search() === query;
+                const rows = Array.from(document.querySelectorAll('#tableSchool tbody tr'));
+                if (rows.length === 0) {
+                    return false;
+                }
+                if (rows.some((row) => row.querySelector('.dataTables_empty'))) {
+                    return true;
                 }
 
-                return document.querySelector('#tableSchool tbody') !== null;
+                const normalizedQuery = query.toLocaleLowerCase('vi-VN');
+                return rows.some((row) =>
+                    row.innerText.toLocaleLowerCase('vi-VN').includes(normalizedQuery)
+                );
             }
             """,
-            school_query,
+            arg=school_query,
             timeout=SEARCH_WAIT_TIMEOUT_MS,
         )
 
-    def _filtered_school_row_count(self):
+    def _visible_school_row_count(self):
         return self.page.evaluate(
             """
             () => {
-                const $ = window.jQuery;
-                if ($ && $.fn && $.fn.dataTable && $.fn.dataTable.isDataTable('#tableSchool')) {
-                    const table = $('#tableSchool').DataTable();
-                    const info = table.page.info();
-                    if (info && Number.isFinite(info.recordsDisplay)) {
-                        return info.recordsDisplay;
-                    }
-                    return table.rows({ search: 'applied' }).count();
-                }
-
                 return Array
                     .from(document.querySelectorAll('#tableSchool tbody tr'))
                     .filter((row) => !row.querySelector('.dataTables_empty'))
